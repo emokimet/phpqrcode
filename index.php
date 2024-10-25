@@ -1,8 +1,8 @@
 <?php
-$amount = $_GET["amount"];
-$message = $_GET["message"];
-$payee = $_GET["payee"];
-$paymentId = $_GET["paymentId"];
+$amount = isset($_GET['amount']) ? $_GET["amount"] : '10';
+$message = isset($_GET['message']) ? $_GET["message"] : 'Default';
+$payee = isset($_GET['payee']) ? $_GET["payee"] : '0000000001';
+$paymentId = isset($_GET['paymentId']) ? $_GET["paymentId"] : '12345';
 $format = 'jpg'; // Use jpg, png or svg
 
 // Passing our data to the array
