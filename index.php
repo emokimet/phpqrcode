@@ -1,46 +1,108 @@
 <?php
-require 'vendor/autoload.php'; // Autoload Composer dependencies
+$amount = $_GET["amount"];
+$message = $_GET["message"];
+$payee = $_GET["payee"];
+$paymentId = $_GET["paymentId"];
+$format = 'jpg'; // Use jpg, png or svg
 
-use Endroid\QrCode\Builder\Builder;
-use Endroid\QrCode\Encoding\Encoding;
-use Endroid\QrCode\ErrorCorrectionLevel\ErrorCorrectionLevelHigh;
-use Endroid\QrCode\Label\Alignment\LabelAlignmentCenter;
-use Endroid\QrCode\Label\Font\NotoSans;
-use Endroid\QrCode\Logo\Logo;
-use Endroid\QrCode\Writer\PngWriter;
+// Passing our data to the array
+$data = json_encode(array(
+    "amount" => array(
+        "type" => "swishNumber",
+        "value" => "$amount",
+    ),
 
-// Get invoice and amount from URL parameters
-$faktura = isset($_GET['faktura']) ? $_GET['faktura'] : '0';
-$amount = isset($_GET['amount']) ? $_GET['amount'] : '0';
+    "format" => "$format",
+    "size" => "300",
 
-// Create Swish payment URL (this will be encoded in the QR code)
-$swishUrl = "swish://paymentrequest?token=" . urlencode("faktura=$faktura&amount=$amount");
+    "message" => array(
+        "type" => "swishString",
+        "value" => "$message"
+    ),
 
-// Generate the QR code using the endroid/qr-code library
-$qrCode = Builder::create()
-    ->writer(new PngWriter())
-    ->writerOptions([])
-    ->data($swishUrl)
-    ->encoding(new Encoding('UTF-8'))
-    ->errorCorrectionLevel(new ErrorCorrectionLevelHigh())
-    ->size(300)
-    ->margin(10)
-    ->build();
+    "payee" => array(
+        "type" => "swishString",
+        "value" => "$payee",
+    ),
 
-// Save the QR code as an image
-$qrCode->saveToFile(__DIR__ . '/images/swish_qr.png');
+    "paymentId" => array(
+        "type" => "swishNumber",
+        "value" => "$paymentId",
+    ),
 
-// Display the QR code in the HTML output
+    "type" => "object"
+));
+
+$data_string = ($data);
+
+function isMobile()
+{
+    // Get the User-Agent string
+    $userAgent = $_SERVER['HTTP_USER_AGENT'];
+
+    // Define an array of mobile user agents
+    $mobileAgents = array(
+        'iPhone',
+        'iPod',
+        'Android',
+        'webOS',
+        'BlackBerry',
+        'Windows Phone',
+        'Opera Mini',
+        'IEMobile',
+        'Mobile'
+    );
+
+    // Check if the User-Agent string contains any of the mobile agents
+    foreach ($mobileAgents as $device) {
+        if (stripos($userAgent, $device) !== false) {
+            return true; // Mobile device detected
+        }
+    }
+
+    return false; // Not a mobile device
+}
+
+// Usage
+if (isMobile()) {
+    $url = "check_swish.php";
+    header("Location: $url");
+} else {
+    // Using CURL to get the generated QR from Swish API
+    $ch = curl_init('https://mpc.getswish.net/qrg-swish/api/v1/prefilled');
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt(
+        $ch,
+        CURLOPT_HTTPHEADER,
+        array(
+            'Content-Type: application/json',
+        )
+    );
+
+    $result = curl_exec($ch);
+
+    if ($result === false) {
+        echo curl_error($ch);
+    }
+
+    $response_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+    curl_close($ch);
+
+    // If any errors occurs
+    if ($response_code == 200 or $response_code == 201) {
+        $base64_result = base64_encode($result);
+
+        echo '<form id="redirectForm" action="payment_page.php" method="post">
+            <input type="hidden" name="result" value="' . $base64_result . '">
+            <input type="hidden" name="paymentId" value="' . $paymentId . '">
+            <input type="hidden" name="format" value="' . $format . '">
+          </form>
+          <script>document.getElementById("redirectForm").submit();</script>';
+    } else {
+        echo 'The request failed. Code: ' . $response_code;
+    }
+}
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Swish Payment</title>
-</head>
-<body>
-    <h1>Scan to Pay with Swish</h1>
-    <img src="images/swish_qr.png" alt="Swish QR Code">
-</body>
-</html>
